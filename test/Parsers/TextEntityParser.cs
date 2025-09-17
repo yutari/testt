@@ -1,7 +1,6 @@
 ﻿using Autodesk.AutoCAD.Geometry;
 using System;
-using System.Globalization;
-using System.Text.RegularExpressions;
+using Autodesk.AutoCAD.Geometry;
 using test.Parsers.Base;
 using test.Utils;
 
