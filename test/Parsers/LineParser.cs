@@ -3,7 +3,6 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using Autodesk.AutoCAD.Geometry;
 using test.Parsers.Base;
-using test.Utils;
 
 namespace test.Parsers
 {
@@ -50,7 +49,7 @@ namespace test.Parsers
                 }
                 catch
                 {
-                    error = ValidationHelper.FormatError(raw);
+                    error = ParseValidator.FormatError(raw);
                     return false;
                 }
             }
@@ -66,9 +65,9 @@ namespace test.Parsers
                     double len = double.Parse(m2.Groups[3].Value, CultureInfo.InvariantCulture);
                     double ang = double.Parse(m2.Groups[4].Value, CultureInfo.InvariantCulture);
 
-                    if (!ValidationHelper.CheckAngle(ang))
+                    if (!ParseValidator.CheckAngle(ang))
                     {
-                        error = ValidationHelper.ValueError(raw, m2.Groups[4].Value);
+                        error = ParseValidator.ValueError(raw, m2.Groups[4].Value);
                         return false;
                     }
 
@@ -81,13 +80,13 @@ namespace test.Parsers
                 }
                 catch
                 {
-                    error = ValidationHelper.FormatError(raw);
+                    error = ParseValidator.FormatError(raw);
                     return false;
                 }
             }
 
             // Sai format
-            error = ValidationHelper.FormatError(raw);
+            error = ParseValidator.FormatError(raw);
             return false;
         }
     }

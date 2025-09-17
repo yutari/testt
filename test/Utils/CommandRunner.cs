@@ -1,10 +1,15 @@
 ﻿using Autodesk.AutoCAD.ApplicationServices;
+using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Runtime;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Text;
+using test.Converters;
 using test.Parsers.Base;
+using test.Reporting;
+using test.Services;
 
 namespace test.Utils
 {
@@ -73,6 +78,34 @@ namespace test.Utils
                 sb.Append(s);
             }
             return sb.ToString();
+        }
+    }
+    public static class SelectionRunner
+    {
+        public static void Run(Editor ed, Database db)
+        {
+            // Lấy input từ user
+            var input = SelectionService.GetUserInput(ed);
+            if (input == null)
+            {
+                ed.WriteMessage("\nSelection cancelled or invalid input.");
+                return;
+            }
+
+            // Thực hiện select trong AutoCAD
+            var entities = SelectionService.SelectEntities(ed, db, input);
+
+            // Convert sang Data Model
+            var selectedData = EntityConverter.Convert(entities);
+
+            // Xuất JSON
+            string path = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
+                    "selection_output.json"
+                    );
+            JsonReportExporter.Export(selectedData, "selection_output.json");
+
+            ed.WriteMessage($"\nExported {selectedData.Count} entities to selection_output.json");
         }
     }
 }

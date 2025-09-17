@@ -1,116 +1,116 @@
-﻿using Autodesk.AutoCAD.Geometry;
-using System;
+﻿using System;
 using Autodesk.AutoCAD.Geometry;
 using test.Parsers.Base;
-using test.Utils;
 
 namespace test.Parsers
 {
     public static class TextEntityParser
     {
-        // regex cho kiểu 1: (x1;y1),(x2;y2),"text"D/M
-        private static readonly Regex TwoPointPattern =
-            new Regex(@"^\(\s*([0-9]+(?:\.[0-9]+)?)\s*;\s*([0-9]+(?:\.[0-9]+)?)\s*\)\s*," +
-                      @"\(\s*([0-9]+(?:\.[0-9]+)?)\s*;\s*([0-9]+(?:\.[0-9]+)?)\s*\)\s*," +
-                      @"""(.*)""([DM])$");
-
-        // regex cho kiểu 2: (x;y),rotation,length,"text"D/M
-        private static readonly Regex RotLenPattern =
-            new Regex(@"^\(\s*([0-9]+(?:\.[0-9]+)?)\s*;\s*([0-9]+(?:\.[0-9]+)?)\s*\)\s*," +
-                      @"([0-9]+(?:\.[0-9]+)?)\s*," +
-                      @"([0-9]+(?:\.[0-9]+)?)\s*," +
-                      @"""(.*)""([DM])$");
+        // Input hợp lệ:
+        // - (x1;y1),(x2;y2),"text"D|M
+        // - (x;y),rot,len,"text"D|M
 
         public static ParseResult<TextData> ParseAll(string input)
         {
             var result = new ParseResult<TextData>();
-            var parts = BaseParserHelper.SplitByDelimiter(input, '-');
-
-            foreach (var raw in parts)
+            foreach (var raw in BaseParserHelper.SplitByDelimiter(input, '-'))
             {
-                if (TryParseOne(raw.Trim(), out TextData data, out string error))
+                if (TryParseOne(raw, out TextData data, out string error))
                     result.AddValid(data);
                 else
                     result.AddError(error);
             }
-
             return result;
         }
 
-        private static bool TryParseOne(string raw, out TextData text, out string error)
+        private static bool TryParseOne(string raw, out TextData textEntity, out string error)
         {
-            text = null;
+            textEntity = null;
             error = null;
 
-            if (string.IsNullOrWhiteSpace(raw))
+            // mode = D (DBText) hoặc M (MText)
+            char mode = char.ToUpper(raw[raw.Length - 1]);
+            if (mode != 'D' && mode != 'M')
             {
-                error = ValidationHelper.FormatError(raw);
+                error = ParseValidator.FormatError(raw);
+                return false;
+            }
+            string core = raw.Substring(0, raw.Length - 1);
+
+            var parts = core.Split(',');
+            if (parts.Length < 3)
+            {
+                error = ParseValidator.FormatError(raw);
                 return false;
             }
 
-            // Kiểu 1: 2 điểm
-            var m1 = TwoPointPattern.Match(raw);
-            if (m1.Success)
+            var textType = (mode == 'M' ? TextType.MText : TextType.DBText);
+
+            // ===== Trường hợp 1: 2 điểm + text =====
+            if (parts.Length == 3)
             {
-                try
+                if (!PrimitiveParser.TryParsePoint(parts[0], out var _, out var p1, true) ||
+                    !PrimitiveParser.TryParsePoint(parts[1], out var _, out var p2, true))
                 {
-                    double x1 = double.Parse(m1.Groups[1].Value, CultureInfo.InvariantCulture);
-                    double y1 = double.Parse(m1.Groups[2].Value, CultureInfo.InvariantCulture);
-                    double x2 = double.Parse(m1.Groups[3].Value, CultureInfo.InvariantCulture);
-                    double y2 = double.Parse(m1.Groups[4].Value, CultureInfo.InvariantCulture);
-
-                    string content = m1.Groups[5].Value.Replace("/n", Environment.NewLine);
-                    string typeStr = m1.Groups[6].Value;
-
-                    var p1 = new Point3d(x1, y1, 0);
-                    var p2 = new Point3d(x2, y2, 0);
-
-                    double dx = p2.X - p1.X;
-                    double dy = p2.Y - p1.Y;
-                    double rotation = Math.Atan2(dy, dx);
-                    double width = Math.Sqrt(dx * dx + dy * dy);
-
-                    var type = typeStr == "D" ? TextType.DBText : TextType.MText;
-                    text = new TextData(p1, rotation, width, content, type);
-                    return true;
-                }
-                catch
-                {
-                    error = ValidationHelper.FormatError(raw);
+                    error = ParseValidator.FormatError(raw);
                     return false;
                 }
-            }
 
-            // Kiểu 2: (x;y),rotation,length,"text"D/M
-            var m2 = RotLenPattern.Match(raw);
-            if (m2.Success)
-            {
-                try
+                if (!PrimitiveParser.TryParseQuotedText(parts[2], out string text, out string textError))
                 {
-                    double x = double.Parse(m2.Groups[1].Value, CultureInfo.InvariantCulture);
-                    double y = double.Parse(m2.Groups[2].Value, CultureInfo.InvariantCulture);
-                    double rotDeg = double.Parse(m2.Groups[3].Value, CultureInfo.InvariantCulture);
-                    double length = double.Parse(m2.Groups[4].Value, CultureInfo.InvariantCulture);
-
-                    string content = m2.Groups[5].Value.Replace("/n", Environment.NewLine);
-                    string typeStr = m2.Groups[6].Value;
-
-                    var p = new Point3d(x, y, 0);
-                    double rotation = rotDeg * Math.PI / 180.0;
-
-                    var type = typeStr == "D" ? TextType.DBText : TextType.MText;
-                    text = new TextData(p, rotation, length, content, type);
-                    return true;
-                }
-                catch
-                {
-                    error = ValidationHelper.FormatError(raw);
+                    error = textError ?? ParseValidator.FormatError(parts[2]);
                     return false;
                 }
+
+                double dx = p2.X - p1.X;
+                double dy = p2.Y - p1.Y;
+                double rot = Math.Atan2(dy, dx);              // radians
+                double width = p1.DistanceTo(p2);             // độ dài đoạn
+
+                textEntity = new TextData(p1, rot, width, text, textType);
+                return true;
             }
 
-            // Không match
-            error = ValidationHelper.FormatError(raw);
+            // ===== Trường hợp 2: 1 điểm + rot + len + text =====
+            if (parts.Length == 4)
+            {
+                if (!PrimitiveParser.TryParsePoint(parts[0], out var _, out var p, true))
+                {
+                    error = ParseValidator.FormatError(parts[0]);
+                    return false;
+                }
+
+                if (!PrimitiveParser.TryParseDouble(parts[1], out double rotDeg) ||
+                    !PrimitiveParser.TryParseDouble(parts[2], out double len))
+                {
+                    error = ParseValidator.FormatError(raw);
+                    return false;
+                }
+
+                if (!ParseValidator.CheckAngle(rotDeg))
+                {
+                    error = ParseValidator.ValueError(raw, parts[1]);
+                    return false;
+                }
+                if (!ParseValidator.CheckPositive(len))
+                {
+                    error = ParseValidator.ValueError(raw, parts[2]);
+                    return false;
+                }
+
+                if (!PrimitiveParser.TryParseQuotedText(parts[3], out string text, out string textError))
+                {
+                    error = textError ?? ParseValidator.FormatError(parts[3]);
+                    return false;
+                }
+
+                double rotRad = rotDeg * Math.PI / 180.0;    // đổi sang radians
+
+                textEntity = new TextData(p, rotRad, len, text, textType);
+                return true;
+            }
+
+            error = ParseValidator.FormatError(raw);
             return false;
         }
     }

@@ -89,6 +89,7 @@ namespace test.Parsers.Base
         public string Content { get; }
         public TextType Type { get; }
 
+
         public TextData(Point3d position, double rotation, double width, string content, TextType type)
         {
             Position = position;

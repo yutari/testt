@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace test.Parsers.Base
 {
     /// <summary>
-    /// Helper dùng chung cho mọi parser (Line, Circle, Polyline, Arc, MText, Leader...)
+    /// Helper dùng chung cho mọi parser (Line, Circle, Polyline, Arc, Text, Leader...)
     /// </summary>
     public static class BaseParserHelper
     {
@@ -23,17 +23,6 @@ namespace test.Parsers.Base
                 if (!string.IsNullOrEmpty(trimmed))
                     yield return trimmed;
             }
-        }
-
-        /// <summary>
-        /// Gạch chân một token lỗi. Nếu có reason thì append reason vào.
-        /// </summary>
-        public static string HighlightError(string token, string reason = null)
-        {
-            if (string.IsNullOrWhiteSpace(reason))
-                return $"_{token}_";
-            else
-                return $"_{token}_ ({reason})";
         }
     }
 }

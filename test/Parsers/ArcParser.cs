@@ -3,7 +3,6 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using Autodesk.AutoCAD.Geometry;
 using test.Parsers.Base;
-using test.Utils;
 
 namespace test.Parsers
 {
@@ -62,7 +61,7 @@ namespace test.Parsers
                 }
                 catch
                 {
-                    error = ValidationHelper.FormatError(raw);
+                    error = ParseValidator.FormatError(raw);
                     return false;
                 }
             }
@@ -79,14 +78,14 @@ namespace test.Parsers
                     double startAng = double.Parse(m2.Groups[4].Value, CultureInfo.InvariantCulture);
                     double endAng = double.Parse(m2.Groups[5].Value, CultureInfo.InvariantCulture);
 
-                    if (r <= 0)
+                    if (!ParseValidator.CheckPositive(r))
                     {
-                        error = ValidationHelper.ValueError(raw, m2.Groups[3].Value);
+                        error = ParseValidator.ValueError(raw, m2.Groups[3].Value);
                         return false;
                     }
-                    if (!ValidationHelper.CheckAngle(startAng) || !ValidationHelper.CheckAngle(endAng))
+                    if (!ParseValidator.CheckAngle(startAng) || !ParseValidator.CheckAngle(endAng))
                     {
-                        error = ValidationHelper.ValueError(raw, $"{startAng},{endAng}");
+                        error = ParseValidator.ValueError(raw, $"{startAng},{endAng}");
                         return false;
                     }
 
@@ -97,12 +96,12 @@ namespace test.Parsers
                 }
                 catch
                 {
-                    error = ValidationHelper.FormatError(raw);
+                    error = ParseValidator.FormatError(raw);
                     return false;
                 }
             }
 
-            error = ValidationHelper.FormatError(raw);
+            error = ParseValidator.FormatError(raw);
             return false;
         }
 
@@ -130,4 +129,3 @@ namespace test.Parsers
         }
     }
 }
-

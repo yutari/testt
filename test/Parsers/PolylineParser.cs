@@ -1,109 +1,87 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Text.RegularExpressions;
 using Autodesk.AutoCAD.Geometry;
 using test.Parsers.Base;
-using test.Utils;
 
 namespace test.Parsers
 {
     public static class PolylineParser
     {
-        // Input: -(x;y),(x;y),A(bulge),(x;y),C-
+        // Regex cho vertex: (x;y) hoặc (x;y),A(bulge)
+        private static readonly Regex VertexPattern =
+            new Regex(@"^\(\s*([0-9]+(?:\.[0-9]+)?)\s*;\s*([0-9]+(?:\.[0-9]+)?)\s*\)(?:\s*,\s*A\(\s*([0-9]+(?:\.[0-9]+)?)\s*\))?$");
+
         public static ParseResult<PolylineData> ParseAll(string input)
         {
             var result = new ParseResult<PolylineData>();
             foreach (var raw in BaseParserHelper.SplitByDelimiter(input, '-'))
             {
-                if (TryParseOne(raw, out PolylineData poly, out string error))
-                    result.AddValid(poly);
+                if (TryParseOne(raw, out PolylineData data, out string error))
+                    result.AddValid(data);
                 else
                     result.AddError(error);
             }
             return result;
         }
 
-        private static bool TryParseOne(string raw, out PolylineData poly, out string error)
+        private static bool TryParseOne(string raw, out PolylineData polyline, out string error)
         {
-            poly = null;
+            polyline = null;
             error = null;
 
             try
             {
-                var tokens = raw.Split(',');
+                bool closed = raw.EndsWith(",C", StringComparison.OrdinalIgnoreCase);
+                if (closed) raw = raw.Substring(0, raw.Length - 2);
+
                 var vertices = new List<PolylineVertex>();
-                bool isClosed = false;
+                var tokens = raw.Split(new[] { ')' }, StringSplitOptions.RemoveEmptyEntries);
 
-                foreach (var tokenRaw in tokens)
+                foreach (var token in tokens)
                 {
-                    var token = tokenRaw.Trim();
+                    var t = token.Trim();
+                    if (string.IsNullOrEmpty(t)) continue;
+                    if (!t.EndsWith(")")) t += ")";
 
-                    if (string.Equals(token, "C", StringComparison.OrdinalIgnoreCase))
+                    var m = VertexPattern.Match(t);
+                    if (!m.Success)
                     {
-                        isClosed = true;
-                        continue;
+                        error = ParseValidator.FormatError(raw);
+                        return false;
                     }
 
-                    if (token.StartsWith("A(", StringComparison.OrdinalIgnoreCase) && token.EndsWith(")"))
+                    double x = double.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture);
+                    double y = double.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture);
+                    double bulge = 0;
+
+                    if (m.Groups[3].Success)
                     {
-                        var inner = token.Substring(2, token.Length - 3);
-                        if (!double.TryParse(inner, NumberStyles.Float, CultureInfo.InvariantCulture, out var bulge))
+                        if (!PrimitiveParser.TryParseDouble(m.Groups[3].Value, out bulge))
                         {
-                            error = ValidationHelper.ValueError(raw, token);
+                            error = ParseValidator.ValueError(raw, m.Groups[3].Value);
                             return false;
                         }
-
-                        if (vertices.Count == 0)
-                        {
-                            error = ValidationHelper.FormatError(raw);
-                            return false;
-                        }
-
-                        var last = vertices[vertices.Count - 1];
-                        vertices[vertices.Count - 1] = new PolylineVertex(last.Point, bulge);
-                        continue;
                     }
 
-                    if (token.StartsWith("(") && token.EndsWith(")"))
-                    {
-                        var inner = token.Trim('(', ')');
-                        var xy = inner.Split(';');
-                        if (xy.Length != 2)
-                        {
-                            error = ValidationHelper.FormatError(raw);
-                            return false;
-                        }
+                    vertices.Add(new PolylineVertex(new Point2d(x, y), bulge));
+                }
 
-                        if (!double.TryParse(xy[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var x) ||
-                            !double.TryParse(xy[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var y))
-                        {
-                            error = ValidationHelper.ValueError(raw, token);
-                            return false;
-                        }
-
-                        vertices.Add(new PolylineVertex(new Point2d(x, y)));
-                        continue;
-                    }
-
-                    error = ValidationHelper.FormatError(raw);
+                if (!ParseValidator.CheckMinVertices(vertices.Count, 2))
+                {
+                    error = ParseValidator.FormatError(raw);
                     return false;
                 }
 
-                if (!ValidationHelper.CheckMinVertices(vertices.Count, 2))
-                {
-                    error = ValidationHelper.FormatError(raw);
-                    return false;
-                }
-
-                poly = new PolylineData(vertices, isClosed);
+                polyline = new PolylineData(vertices, closed);
                 return true;
             }
             catch
             {
-                error = ValidationHelper.FormatError(raw);
+                error = ParseValidator.FormatError(raw);
                 return false;
             }
         }
     }
 }
-

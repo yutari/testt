@@ -1,9 +1,6 @@
-﻿using Autodesk.AutoCAD.Geometry;
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
+﻿using System.Collections.Generic;
+using Autodesk.AutoCAD.Geometry;
 using test.Parsers.Base;
-using test.Utils;
 
 namespace test.Parsers
 {
@@ -12,60 +9,69 @@ namespace test.Parsers
         // Input hợp lệ:
         // - (x1;y1),(x2;y2),"text"
         // - (x1;y1),(x2;y2),(x3;y3),"text"
+
         public static ParseResult<LeaderData> ParseAll(string input)
         {
             var result = new ParseResult<LeaderData>();
-            var parts = BaseParserHelper.SplitByDelimiter(input, '-');
-
-            Parallel.ForEach(parts, raw =>
+            foreach (var raw in BaseParserHelper.SplitByDelimiter(input, '-'))
             {
-                if (TryParseOne(raw, out LeaderData data, out string error))
-                    result.AddValid(data);
+                if (TryParseOne(raw, out LeaderData leader, out string error))
+                    result.AddValid(leader);
                 else
                     result.AddError(error);
-            });
-
+            }
             return result;
         }
 
         private static bool TryParseOne(string raw, out LeaderData leader, out string error)
         {
             leader = null;
+            error = null;
 
-            if (string.IsNullOrWhiteSpace(raw))
+            var parts = raw.Split(',');
+            if (parts.Length < 3)
             {
-                error = ValidationHelper.FormatError(raw);
-                return false;
-            }
-
-            var s = raw.Trim();
-
-            // Parse text
-            if (!TextParser.TryParseQuotedText(s, out string text, out error))
-                return false;
-
-            // Phần trước dấu " đầu tiên là danh sách điểm
-            var firstQuote = s.IndexOf('"');
-            var head = s.Substring(0, firstQuote).Trim();
-            if (head.EndsWith(",")) head = head.Substring(0, head.Length - 1);
-
-            var tokens = head.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
-
-            if (tokens.Length < 2 || tokens.Length > 3)
-            {
-                error = ValidationHelper.FormatError(raw);
+                error = ParseValidator.FormatError(raw);
                 return false;
             }
 
             var pts = new List<Point3d>();
-            foreach (var t in tokens)
+
+            // parse point1
+            if (!PrimitiveParser.TryParsePoint(parts[0], out var p2d, out var p3d, true))
             {
-                if (!PointParser.TryParse(t.Trim(), out _, out var p, true))
+                error = ParseValidator.FormatError(parts[0]);
+                return false;
+            }
+            pts.Add(p3d);
+
+            // parse point2
+            if (!PrimitiveParser.TryParsePoint(parts[1], out p2d, out p3d, true))
+            {
+                error = ParseValidator.FormatError(parts[1]);
+                return false;
+            }
+            pts.Add(p3d);
+
+            int textIndex = 2;
+
+            // có thể có 3 điểm
+            if (parts.Length >= 4)
+            {
+                if (!PrimitiveParser.TryParsePoint(parts[2], out p2d, out p3d, true))
                 {
-                    error = ValidationHelper.ValueError(raw, t);
+                    error = ParseValidator.FormatError(parts[2]);
                     return false;
                 }
-                pts.Add(p);
+                pts.Add(p3d);
+                textIndex = 3;
+            }
+
+            // parse text
+            if (!PrimitiveParser.TryParseQuotedText(parts[textIndex], out string text, out string textError))
+            {
+                error = textError ?? ParseValidator.FormatError(parts[textIndex]);
+                return false;
             }
 
             leader = new LeaderData(pts, text);
