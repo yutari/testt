@@ -1,7 +1,7 @@
 ﻿using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Geometry;
-using netDxf; // để dùng AciColor
+using netDxf;
 using System.Collections.Generic;
 using test.Data;
 
@@ -9,7 +9,6 @@ namespace test.Facade
 {
     public static class SelectionFacade
     {
-        // Struct RGB đơn giản
         private struct Rgb
         {
             public byte R, G, B;
@@ -88,33 +87,26 @@ namespace test.Facade
             return resultIds.Count > 0 ? SelectionSet.FromObjectIds(resultIds.ToArray()) : null;
         }
 
-        /// <summary>
         /// Resolve màu thực sự hiển thị của entity (ByLayer, ByBlock, TrueColor, ACI).
-        /// </summary>
         private static Rgb ResolveEntityRgb(Entity ent, Transaction tr)
         {
             var c = ent.Color;
 
-            // ByLayer → lấy màu của Layer
             if (c.IsByLayer)
             {
                 var layer = (LayerTableRecord)tr.GetObject(ent.LayerId, OpenMode.ForRead);
                 return ConvertAcColor(layer.Color);
             }
 
-            // ByBlock → lấy màu của BlockReference
             if (c.IsByBlock && ent is BlockReference br)
             {
                 return ConvertAcColor(br.Color);
             }
 
-            // TrueColor hoặc ACI trực tiếp
             return ConvertAcColor(c);
         }
 
-        /// <summary>
         /// Convert Autodesk AutoCAD Color → RGB
-        /// </summary>
         private static Rgb ConvertAcColor(Autodesk.AutoCAD.Colors.Color acCol)
         {
             switch (acCol.ColorMethod)
@@ -124,7 +116,7 @@ namespace test.Facade
 
                 case Autodesk.AutoCAD.Colors.ColorMethod.ByAci:
                     var aci = AciColor.FromCadIndex(acCol.ColorIndex);
-                    var sys = aci.ToColor(); // System.Drawing.Color
+                    var sys = aci.ToColor();
                     return new Rgb(sys.R, sys.G, sys.B);
 
                 default:
@@ -132,9 +124,7 @@ namespace test.Facade
             }
         }
 
-        /// <summary>
         /// So sánh màu thực tế với danh sách màu từ JSON (chuỗi dạng "rgb(r,g,b)").
-        /// </summary>
         private static bool MatchWithTargetColors(Rgb actual, List<string> targets)
         {
             foreach (var s in targets)
