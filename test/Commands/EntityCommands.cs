@@ -1,96 +1,110 @@
 ﻿using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
+using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Runtime;
-using System.Collections.Generic;
-using test.Parsers;
-using test.Parsers.Base;
-using test.Services;
-using test.Utils;
+using System.IO;
+using test.Data;
+using test.Facade;
+using test.IO;
+using test.Converters;
 
 namespace test.Commands
 {
+    /// <summary>
+    /// Lệnh automation:
+    /// - DRAW_FROM_JSON: vẽ từ file JSON (DrawingBatchDto)
+    /// - SELECT_FROM_JSON: chọn theo JSON (SelectionRequest) và xuất kết quả ra JSON
+    /// </summary>
     public class EntityCommands
     {
-        [CommandMethod("DRAWLINES")]
-        public void DrawLines()
+        [CommandMethod("DRAW_FROM_JSON")]
+        public void DrawFromJson()
         {
             var doc = Application.DocumentManager.MdiActiveDocument;
-            CommandRunner.Run(
-                doc.Editor,
-                doc.Database,
-                "(dạng: - (x;y),(x;y) - (x;y),len,ang -)",
-                LineParser.ParseAll,
-                DrawingService.DrawLines,
-                "line"
-            );
+            var ed = doc.Editor;
+            var db = doc.Database;
+
+            var pr = new PromptStringOptions("\nNhập đường dẫn file JSON vẽ: ") { AllowSpaces = true };
+            var res = ed.GetString(pr);
+            if (res.Status != PromptStatus.OK) return;
+
+            var path = res.StringResult.Trim('"');
+            if (!File.Exists(path))
+            {
+                ed.WriteMessage("\nFile không tồn tại.");
+                return;
+            }
+
+            try
+            {
+                string json = File.ReadAllText(path);
+                var batch = DrawingBatch.FromJson(json);
+                DrawingFacade.DrawAll(db, batch);
+                ed.WriteMessage("\n✔ Đã vẽ xong từ JSON.");
+            }
+            catch (System.Exception ex)
+            {
+                ed.WriteMessage("\nLỗi: " + ex.Message);
+            }
         }
 
-        [CommandMethod("DRAWCIRCLES")]
-        public void DrawCircles()
+        [CommandMethod("SELECT_FROM_JSON")]
+        public void SelectFromJson()
         {
             var doc = Application.DocumentManager.MdiActiveDocument;
-            CommandRunner.Run(
-                doc.Editor,
-                doc.Database,
-                "(dạng: - (x;y),r - (x;y),r -)",
-                CircleParser.ParseAll,
-                DrawingService.DrawCircles,
-                "circle"
-            );
+            var ed = doc.Editor;
+            var db = doc.Database;
+
+            var inOpt = new PromptStringOptions("\nNhập đường dẫn file JSON yêu cầu chọn: ") { AllowSpaces = true };
+            var inRes = ed.GetString(inOpt);
+            if (inRes.Status != PromptStatus.OK) return;
+
+            var outOpt = new PromptStringOptions("\nNhập đường dẫn file output (JSON): ") { AllowSpaces = true };
+            var outRes = ed.GetString(outOpt);
+            if (outRes.Status != PromptStatus.OK) return;
+
+            var inPath = inRes.StringResult.Trim('"');
+            var outPath = outRes.StringResult.Trim('"');
+
+            if (!File.Exists(inPath))
+            {
+                ed.WriteMessage("\nFile yêu cầu chọn không tồn tại.");
+                return;
+            }
+
+            try
+            {
+                var req = JsonFile.Read<SelectionRequest>(inPath);
+                var sset = SelectionFacade.Run(ed, db, req, false);
+                if (sset == null)
+                {
+                    ed.WriteMessage("\nKhông chọn được đối tượng nào.");
+                    return;
+                }
+
+                var entities = sset.GetObjectIds();
+                var list = new System.Collections.Generic.List<Entity>();
+                using (var tr = db.TransactionManager.StartTransaction())
+                {
+                    for (int i = 0; i < entities.Length; i++)
+                    {
+                        var e = tr.GetObject(entities[i], OpenMode.ForRead) as Entity;
+                        if (e != null) list.Add(e);
+                    }
+                    tr.Commit();
+                }
+
+                var selectedData = EntityConverter.Convert(list);
+                DataExporter.Export(selectedData, outPath, ExportFormat.Json);
+
+                ed.WriteMessage("\n✔ Đã xuất kết quả chọn ra file.");
+            }
+            catch (System.Exception ex)
+            {
+                ed.WriteMessage("\nLỗi: " + ex.Message);
+            }
         }
 
-        [CommandMethod("DRAWPOLYLINES")]
-        public void DrawPolylines()
-        {
-            var doc = Application.DocumentManager.MdiActiveDocument;
-            CommandRunner.Run(
-                doc.Editor,
-                doc.Database,
-                "(dạng: - (x1;y1),(x2;y2),A(bulge),(x3;y3),C - ... )",
-                PolylineParser.ParseAll,
-                DrawingService.DrawPolylines,
-                "polyline"
-            );
-        }
-        [CommandMethod("DRAWARCS")]
-        public void DrawArcs()
-        {
-            var doc = Application.DocumentManager.MdiActiveDocument;
-            CommandRunner.Run(
-                doc.Editor,
-                doc.Database,
-                "(dạng: - (x1;y1),(x2;y2),(x3;y3) - hoặc - (x;y),r,startAng,endAng -)",
-                ArcParser.ParseAll,
-                DrawingService.DrawArcs,
-                "arc"
-            );
-        }
-        [CommandMethod("DRAWLEADERS")]
-        public void DrawLeaders()
-        {
-            var doc = Application.DocumentManager.MdiActiveDocument;
-            CommandRunner.Run(
-                doc.Editor,
-                doc.Database,
-                "(dạng: - (x1;y1),(x2;y2),\"text\" - hoặc - (x1;y1),(x2;y2),(x3;y3),\"text\" -)",
-                LeaderParser.ParseAll,
-                DrawingService.DrawLeaders,
-                "leader"
-            );
-        }
-        [CommandMethod("DRAWTEXTS")]
-        public void DrawTexts()
-        {
-            var doc = Application.DocumentManager.MdiActiveDocument;
-            CommandRunner.Run(
-                doc.Editor,
-                doc.Database,
-                "(dạng: - (x1;y1),(x2;y2),\"text\"D - hoặc - (x1;y1),(x2;y2),\"text\"M - " +
-                "hoặc - (x;y),rotation,length,\"text\"D/M -)",
-                TextEntityParser.ParseAll,
-                DrawingService.DrawTexts,
-                "text"
-            );
-        }
     }
+
 }

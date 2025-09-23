@@ -1,11 +1,9 @@
 ﻿using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
-using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Runtime;
 using System.Collections.Generic;
-using System.Linq;
+using test.IO;
 using test.Services;
-using test.Reporting;
 
 namespace test.Commands
 {
@@ -45,13 +43,7 @@ namespace test.Commands
                 tr2.Commit();
             }
 
-            ed.WriteMessage("\n--------------------------------");
-            ed.WriteMessage("\nBản vẽ có những thành phần sau:");
-            EntityPrinter.Print(ed, root);
-            ed.WriteMessage("\nTổng số các thành phần chi tiết:");
-            foreach (var kv in totals.OrderBy(k => k.Key))
-                ed.WriteMessage($"\n- {kv.Key}: {kv.Value}");
-            ed.WriteMessage("\n--------------------------------\n");
+            EditorPrinter.Print(ed, new { Tree = root, Totals = totals }, "Bản vẽ có những thành phần sau:");
         }
     }
 }
