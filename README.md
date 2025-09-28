@@ -1,3 +1,4 @@
+Mọi ví dụ dưới đây không liền mạch, chỉ là form để tham khảo (đã test và chạy) xin hãy cập nhật số liệu tùy từng máy:
 ví dụ file json test draw:
 {
   "lines": [
@@ -44,4 +45,56 @@ ví dụ file test select:
     "colors": ["rbg(255,0,0)", "rbg(255,255,255)"]
   }
 }
-
+ví dụ file test update (xdata):
+{
+  "Requests": [
+    {
+      "Handle": "2F6",
+      "Data": {
+        "Type": "Line",
+        "XData": {
+          "AppName": "MYAPP",
+          "Values": [
+            { "Type": "string", "Value": "LineDemo" }
+          ]
+        }
+      }
+    },
+    {
+      "Handle": "2F7",
+      "Data": {
+        "Type": "Circle",
+        "XData": {
+          "AppName": "MYAPP",
+          "Values": [
+            { "Type": "string", "Value": "CircleDemo" }
+          ]
+        }
+      }
+    },
+    {
+      "Handle": "2F8",
+      "Data": {
+        "Type": "DBText",
+        "XData": {
+          "AppName": "MYAPP",
+          "Values": [
+            { "Type": "string", "Value": "TextDemo" }
+          ]
+        }
+      }
+    }
+  ]
+}
+Ví dụ chèn block từ file dwg ngoài:
+{
+  "blocks": [
+    {
+      "filePath": "D:/Tài liệu/Đi làm/thietkecua/ThietKeCuaNhua.dwg",
+      "blockName": "HinhChieuBangABS_140_2NepTC",
+      "position": { "X": 0, "Y": 0, "Z": 0 },
+      "scale": 1.0,
+      "rotation": 0.0
+    }
+  ]
+}
