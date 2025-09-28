@@ -2,19 +2,16 @@
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Runtime;
+using System.Collections.Generic;
 using System.IO;
+using System.Text;
+using test.Converters;
 using test.Data;
 using test.Facade;
 using test.IO;
-using test.Converters;
 
 namespace test.Commands
 {
-    /// <summary>
-    /// Lệnh automation:
-    /// - DRAW_FROM_JSON: vẽ từ file JSON (DrawingBatchDto)
-    /// - SELECT_FROM_JSON: chọn theo JSON (SelectionRequest) và xuất kết quả ra JSON
-    /// </summary>
     public class EntityCommands
     {
         [CommandMethod("DRAW_FROM_JSON")]
@@ -24,23 +21,56 @@ namespace test.Commands
             var ed = doc.Editor;
             var db = doc.Database;
 
-            var pr = new PromptStringOptions("\nNhập đường dẫn file JSON vẽ: ") { AllowSpaces = true };
-            var res = ed.GetString(pr);
-            if (res.Status != PromptStatus.OK) return;
+            // 🔹 Chọn file input JSON
+            var openOpts = new PromptOpenFileOptions("\nChọn file JSON để vẽ:");
+            openOpts.Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*";
+            var openRes = ed.GetFileNameForOpen(openOpts);
+            if (openRes.Status != PromptStatus.OK) return;
 
-            var path = res.StringResult.Trim('"');
-            if (!File.Exists(path))
+            var inPath = openRes.StringResult;
+            if (!File.Exists(inPath))
             {
-                ed.WriteMessage("\nFile không tồn tại.");
+                ed.WriteMessage("\n❌ File không tồn tại.");
                 return;
             }
 
             try
             {
-                string json = File.ReadAllText(path);
-                var batch = DrawingBatch.FromJson(json);
-                DrawingFacade.DrawAll(db, batch);
-                ed.WriteMessage("\n✔ Đã vẽ xong từ JSON.");
+                var batch = JsonFile.Read<DrawingBatch>(inPath);
+
+                var ids = DrawingFacade.DrawAll(db, batch);
+
+                var handleInfos = new List<object>();
+                using (var tr = db.TransactionManager.StartTransaction())
+                {
+                    foreach (var id in ids)
+                    {
+                        var ent = tr.GetObject(id, OpenMode.ForRead) as Entity;
+                        if (ent != null)
+                        {
+                            handleInfos.Add(new
+                            {
+                                Handle = ent.Handle.ToString(),
+                                Type = ent.GetType().Name
+                            });
+                        }
+                    }
+                    tr.Commit();
+                }
+
+                var saveOpts = new PromptSaveFileOptions("\nChọn nơi lưu file handle JSON:");
+                saveOpts.Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*";
+                var saveRes = ed.GetFileNameForSave(saveOpts);
+                if (saveRes.Status == PromptStatus.OK)
+                {
+                    var outPath = saveRes.StringResult;
+                    DataExporter.Export(handleInfos, outPath, ExportFormat.Json);
+                    ed.WriteMessage($"\n✔ Đã vẽ xong và lưu danh sách handle ra file: {outPath}");
+                }
+                else
+                {
+                    ed.WriteMessage("\n⚠ Vẽ xong nhưng bạn không lưu file handle.");
+                }
             }
             catch (System.Exception ex)
             {
@@ -55,16 +85,18 @@ namespace test.Commands
             var ed = doc.Editor;
             var db = doc.Database;
 
-            var inOpt = new PromptStringOptions("\nNhập đường dẫn file JSON yêu cầu chọn: ") { AllowSpaces = true };
-            var inRes = ed.GetString(inOpt);
+            var inOpt = new PromptOpenFileOptions("\nChọn file JSON yêu cầu chọn:");
+            inOpt.Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*";
+            var inRes = ed.GetFileNameForOpen(inOpt);
             if (inRes.Status != PromptStatus.OK) return;
 
-            var outOpt = new PromptStringOptions("\nNhập đường dẫn file output (JSON): ") { AllowSpaces = true };
-            var outRes = ed.GetString(outOpt);
+            var outOpt = new PromptSaveFileOptions("\nChọn nơi lưu file output (JSON):");
+            outOpt.Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*";
+            var outRes = ed.GetFileNameForSave(outOpt);
             if (outRes.Status != PromptStatus.OK) return;
 
-            var inPath = inRes.StringResult.Trim('"');
-            var outPath = outRes.StringResult.Trim('"');
+            var inPath = inRes.StringResult;
+            var outPath = outRes.StringResult;
 
             if (!File.Exists(inPath))
             {
@@ -74,28 +106,33 @@ namespace test.Commands
 
             try
             {
-                var req = JsonFile.Read<SelectionRequest>(inPath);
-                var sset = SelectionFacade.Run(ed, db, req, false);
-                if (sset == null)
+                var batch = JsonFile.Read<SelectionBatch>(inPath);
+                var ssets = SelectionFacade.Run(ed, db, batch, false);
+
+                if (ssets == null || ssets.Count == 0)
                 {
                     ed.WriteMessage("\nKhông chọn được đối tượng nào.");
                     return;
                 }
 
-                var entities = sset.GetObjectIds();
-                var list = new System.Collections.Generic.List<Entity>();
-                using (var tr = db.TransactionManager.StartTransaction())
+                var results = new List<List<SchemaEntity>>();
+                foreach (var sset in ssets)
                 {
-                    for (int i = 0; i < entities.Length; i++)
+                    var entities = new List<Entity>();
+                    using (var tr = db.TransactionManager.StartTransaction())
                     {
-                        var e = tr.GetObject(entities[i], OpenMode.ForRead) as Entity;
-                        if (e != null) list.Add(e);
+                        foreach (var id in sset.GetObjectIds())
+                        {
+                            var e = tr.GetObject(id, OpenMode.ForRead) as Entity;
+                            if (e != null) entities.Add(e);
+                        }
+                        tr.Commit();
                     }
-                    tr.Commit();
-                }
 
-                var selectedData = EntityConverter.Convert(list);
-                DataExporter.Export(selectedData, outPath, ExportFormat.Json);
+                    var schemaList = EntityConverter.Convert(entities);
+                    results.Add(schemaList);
+                }
+                DataExporter.Export(results, outPath, ExportFormat.Json);
 
                 ed.WriteMessage("\n✔ Đã xuất kết quả chọn ra file.");
             }
@@ -105,6 +142,36 @@ namespace test.Commands
             }
         }
 
-    }
+        [CommandMethod("UPDATE_FROM_JSON")]
+        public void UpdateFromJson()
+        {
+            var doc = Application.DocumentManager.MdiActiveDocument;
+            var ed = doc.Editor;
+            var db = doc.Database;
 
+            var fileOpts = new PromptOpenFileOptions("\nChọn file JSON update:");
+            fileOpts.Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*";
+            var res = ed.GetFileNameForOpen(fileOpts);
+            if (res.Status != PromptStatus.OK) return;
+
+            var path = res.StringResult;
+            if (!File.Exists(path))
+            {
+                ed.WriteMessage("\nFile không tồn tại.");
+                return;
+            }
+
+            try
+            {
+                var batch = JsonFile.Read<UpdateBatch>(path);
+                UpdateFacade.Run(db, batch);
+
+                ed.WriteMessage("\n✔ Đã cập nhật entity từ JSON.");
+            }
+            catch (System.Exception ex)
+            {
+                ed.WriteMessage("\nLỗi: " + ex.Message);
+            }
+        }
+    }
 }

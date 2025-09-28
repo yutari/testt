@@ -63,7 +63,6 @@ namespace test.Services
                 }
                 else
                 {
-                    // Không gom nhóm: đếm theo đúng tên class
                     root.GetOrAddChild(ent.GetType().Name).Count++;
                 }
             }
@@ -104,7 +103,6 @@ namespace test.Services
         {
             if (ent is BlockReference br)
             {
-                // ❌ Không cộng BlockReference vào totals, chỉ duyệt xuống con
                 var defId = GetEffectiveBlockDefId(br);
                 var def = (BlockTableRecord)tr.GetObject(defId, OpenMode.ForRead);
 

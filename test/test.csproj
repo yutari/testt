@@ -79,23 +79,27 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Commands\BlockCommands.cs" />
     <Compile Include="Commands\EntityCommands.cs" />
     <Compile Include="Commands\ReportCommands.cs" />
     <Compile Include="Converters\EntityConverter.cs" />
-    <Compile Include="Data\DrawingBatch.cs" />
+    <Compile Include="Data\BatchModels.cs" />
     <Compile Include="Data\Schema.cs" />
-    <Compile Include="Data\SelectedEntityData.cs" />
-    <Compile Include="Data\SelectionRequest.cs" />
     <Compile Include="Data\GeometryData.cs" />
+    <Compile Include="Facades\BlockFacade.cs" />
     <Compile Include="Facades\DrawingFacade.cs" />
     <Compile Include="Facades\SelectionFacade.cs" />
+    <Compile Include="Facades\UpdateFacade.cs" />
     <Compile Include="IO\JsonFile.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="IO\EditorPrinter.cs" />
     <Compile Include="IO\DataExporter.cs" />
-    <Compile Include="Services\DrawingHelper.cs" />
+    <Compile Include="Services\BlockService.cs" />
+    <Compile Include="Services\Helper\DrawingHelper.cs" />
     <Compile Include="Services\DrawingService.cs" />
     <Compile Include="Services\ReadingService.cs" />
+    <Compile Include="Services\SelectionService.cs" />
+    <Compile Include="Services\UpdateService.cs" />
     <Compile Include="Utils\SchemaValidator.cs" />
   </ItemGroup>
   <ItemGroup>

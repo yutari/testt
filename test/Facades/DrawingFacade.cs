@@ -1,33 +1,26 @@
-﻿using Autodesk.AutoCAD.DatabaseServices;
+﻿using System.Collections.Generic;
+using Autodesk.AutoCAD.DatabaseServices;
 using test.Data;
 using test.Services;
 
 namespace test.Facade
 {
-    /// <summary>Nhận DrawingBatch → gọi DrawingService. Viết rõ ràng, dễ đọc.</summary>
+    /// <summary>Nhận DrawingBatch → gọi DrawingService, gom ObjectId trả ra.</summary>
     public static class DrawingFacade
     {
-        public static void DrawAll(Database db, DrawingBatch batch)
+        public static List<ObjectId> DrawAll(Database db, DrawingBatch batch)
         {
-            if (db == null || batch == null) return;
+            var ids = new List<ObjectId>();
+            if (db == null || batch == null) return ids;
 
-            if (batch.Lines != null && batch.Lines.Count > 0)
-                DrawingService.DrawLines(batch.Lines, db);
+            if (batch.Lines?.Count > 0) ids.AddRange(DrawingService.DrawLines(batch.Lines, db));
+            if (batch.Circles?.Count > 0) ids.AddRange(DrawingService.DrawCircles(batch.Circles, db));
+            if (batch.Arcs?.Count > 0) ids.AddRange(DrawingService.DrawArcs(batch.Arcs, db));
+            if (batch.Polylines?.Count > 0) ids.AddRange(DrawingService.DrawPolylines(batch.Polylines, db));
+            if (batch.Leaders?.Count > 0) ids.AddRange(DrawingService.DrawLeaders(batch.Leaders, db));
+            if (batch.Texts?.Count > 0) ids.AddRange(DrawingService.DrawTexts(batch.Texts, db));
 
-            if (batch.Circles != null && batch.Circles.Count > 0)
-                DrawingService.DrawCircles(batch.Circles, db);
-
-            if (batch.Arcs != null && batch.Arcs.Count > 0)
-                DrawingService.DrawArcs(batch.Arcs, db);
-
-            if (batch.Polylines != null && batch.Polylines.Count > 0)
-                DrawingService.DrawPolylines(batch.Polylines, db);
-
-            if (batch.Leaders != null && batch.Leaders.Count > 0)
-                DrawingService.DrawLeaders(batch.Leaders, db);
-
-            if (batch.Texts != null && batch.Texts.Count > 0)
-                DrawingService.DrawTexts(batch.Texts, db);
+            return ids;
         }
     }
 }
