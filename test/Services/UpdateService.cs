@@ -1,7 +1,9 @@
-﻿using Autodesk.AutoCAD.DatabaseServices;
+﻿using Autodesk.AutoCAD.Colors;
+using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.Geometry;
-using test.Data;
+using System;
 using test.Converters;
+using test.Data;
 
 namespace test.Services
 {
@@ -20,7 +22,17 @@ namespace test.Services
                 DrawingHelper.ApplyLayer(ent, schema.Layer, db, tr);
 
             if (!string.IsNullOrWhiteSpace(schema.Color))
-                DrawingHelper.ApplyColor(ent, schema.Color);
+            {
+                if (string.Equals(schema.Color, "ByLayer", StringComparison.OrdinalIgnoreCase))
+                {
+                    ent.Color = Color.FromColorIndex(ColorMethod.ByLayer, 256);
+                }
+                else
+                {
+                    DrawingHelper.ApplyColor(ent, schema.Color);
+                }
+            }
+
 
             if (!string.IsNullOrWhiteSpace(schema.Linetype))
                 ent.Linetype = schema.Linetype;
